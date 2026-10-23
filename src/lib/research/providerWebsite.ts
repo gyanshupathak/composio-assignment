@@ -20,6 +20,7 @@ export interface WebsiteResolution {
   detail: string;
 }
 
+/** Profile, store, and news hosts. A page here is about a company; it is not the company. */
 const DIRECTORY_HOSTS = [
   "wikipedia.org",
   "github.com",
@@ -45,7 +46,35 @@ const DIRECTORY_HOSTS = [
   "google.com",
   "bing.com",
   "duckduckgo.com",
+  "pitchbook.com",
+  "tracxn.com",
+  "indexed.vc",
+  "startupintros.com",
+  "cbinsights.com",
+  "wellfound.com",
+  "angellist.com",
+  "dealroom.co",
+  "owler.com",
+  "zoominfo.com",
+  "craft.co",
+  "similarweb.com",
+  "alternativeto.net",
+  "saashub.com",
+  "f6s.com",
+  "apple.com",
+  "apps.apple.com",
+  "techcrunch.com",
+  "bloomberg.com",
+  "forbes.com",
+  "reuters.com",
+  "theverge.com",
+  "wired.com",
+  "venturebeat.com",
+  "businessinsider.com",
 ];
+
+/** Safety ceiling so a long model reply cannot turn into an endless picker. */
+const MAX_STARTUP_CHOICES = 12;
 
 /** Hosts where each customer gets a subdomain, so the parent is not the company. */
 const SHARED_PARENTS = new Set([
@@ -204,7 +233,7 @@ export function resolveProviderWebsite(
   if (ranked.length === 0) {
     return {
       status: "unconfirmed",
-      detail: `No single official website was found for "${providerName}", so research continues from the name only.`,
+      detail: `No startup named "${providerName}" was found, so research did not start and no guide was saved.`,
     };
   }
 
@@ -225,19 +254,24 @@ export function resolveProviderWebsite(
     };
   }
 
-  const candidates: AmbiguityCandidate[] = ranked.slice(0, 4).map((site) => ({
+  const shown = ranked.slice(0, MAX_STARTUP_CHOICES);
+  const candidates: AmbiguityCandidate[] = shown.map((site) => ({
     id: site.host.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
     name: mentionsName(site.title, site.host, providerName)
       ? site.title.slice(0, 80)
       : `${providerName} (${site.host})`,
     domain: site.host,
-    description: (site.snippet || "This website appeared in search results for that name.").slice(0, 180),
+    description: (site.snippet || "This website appeared in search results for that name.").slice(0, 220),
   }));
+  const count = ranked.length;
 
   return {
     status: "ambiguous",
     candidates,
-    clarifyingQuestion: `"${providerName}" matches more than one website. Which one do you mean?`,
-    detail: `"${providerName}" matches ${candidates.length} websites, so no website was chosen.`,
+    clarifyingQuestion:
+      count > shown.length
+        ? `"${providerName}" is used by ${count} startups. Here are ${shown.length}. Which one do you mean?`
+        : `"${providerName}" is used by ${count} startups. Which one do you mean?`,
+    detail: `"${providerName}" is used by ${count} startups, so no website was chosen.`,
   };
 }

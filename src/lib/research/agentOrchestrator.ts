@@ -296,26 +296,41 @@ export async function runLiveInvestigation(
       "identifying_provider",
       "1. Identifying the provider",
       "in_progress",
-      `Looking up the official website for "${providerName}".`
+      `Checking which startups are named "${providerName}".`
     );
+    // A live model decides the list. Search results are only a fallback when that model is off,
+    // so a funding profile cannot show up as if it were a second company.
+    const modelDecides = modelProvider.supportsLiveResearch?.() === true;
+    const injectedNaming =
+      modelProvider.supportsLiveResearch === undefined &&
+      Boolean(modelProvider.findProductsWithThisName);
     try {
-      const safeName = providerName.replace(/"/g, "");
-      const [official, company, fromModel] = await Promise.all([
-        searchProvider.search(`"${safeName}" official website`, 8),
-        searchProvider.search(`${safeName} company`, 6),
-        modelProvider.findProductsWithThisName
-          ? modelProvider.findProductsWithThisName(providerName).catch(() => [])
-          : Promise.resolve([]),
-      ]);
-      const found = [
-        ...(official.ok ? official.results : []),
-        ...(company.ok ? company.results : []),
-        ...fromModel.map((item) => ({
+      let found: RawDiscoveredSource[] = [];
+      let resolution = resolveProviderWebsite(providerName, []);
+      if ((modelDecides || injectedNaming) && modelProvider.findProductsWithThisName) {
+        const fromModel = await modelProvider.findProductsWithThisName(providerName);
+        found = fromModel.map((item) => ({
           ...item,
           retrievalStatus: "search_indexed_verified" as const,
-        })),
-      ];
-      const resolution = resolveProviderWebsite(providerName, found);
+        }));
+        resolution = resolveProviderWebsite(providerName, found);
+        if (!modelDecides && resolution.status === "unconfirmed") {
+          found = [];
+          resolution = resolveProviderWebsite(providerName, []);
+        }
+      }
+      if (!modelDecides && resolution.status === "unconfirmed") {
+        const safeName = providerName.replace(/"/g, "");
+        const [official, company] = await Promise.all([
+          searchProvider.search(`"${safeName}" official website`, 8),
+          searchProvider.search(`${safeName} company`, 6),
+        ]);
+        found = [
+          ...(official.ok ? official.results : []),
+          ...(company.ok ? company.results : []),
+        ];
+        resolution = resolveProviderWebsite(providerName, found);
+      }
       if (resolution.status === "ambiguous") {
         pushStage(
           "identifying_provider",
@@ -349,7 +364,22 @@ export async function runLiveInvestigation(
       }
       websiteDetail = resolution.detail;
     } catch {
-      websiteDetail = `The website lookup for "${providerName}" did not finish, so research continues from the name only.`;
+      websiteDetail = `The startup check for "${providerName}" did not finish, so research did not start and no guide was saved.`;
+    }
+
+    if (!canonicalDomain) {
+      pushStage(
+        "identifying_provider",
+        "1. Identifying the provider",
+        "failed",
+        websiteDetail
+      );
+      return {
+        status: "research_failed",
+        stages,
+        runtimeConfigStatus,
+        errorMessage: websiteDetail,
+      };
     }
   }
 

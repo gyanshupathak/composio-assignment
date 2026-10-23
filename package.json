@@ -2,14 +2,14 @@
   "name": "authpath",
   "version": "1.0.0",
   "private": true,
-  "description": "AuthPath — Developer Research, OAuth Setup Intelligence, and Live Integration Readiness Agent",
+  "description": "AuthPath \u2014 Developer Research, OAuth Setup Intelligence, and Live Integration Readiness Agent",
   "engines": {
     "node": ">=20.9.0"
   },
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "dev": "node init && next dev",
+    "build": "node init && next build",
+    "start": "node init && next start",
     "lint": "eslint src evals tests",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

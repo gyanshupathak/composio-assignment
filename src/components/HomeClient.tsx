@@ -272,8 +272,10 @@ export function HomeClient({ initialGuides }: HomeClientProps) {
       }
 
       if (data.status === "ambiguous_clarification_needed") {
+        setStages([]);
+        setShowStageDetails(false);
         setAmbiguityQuestion(
-          data.clarifyingQuestion ?? "Which product do you mean?"
+          data.clarifyingQuestion ?? "Which startup do you mean?"
         );
         setAmbiguityCandidates(data.ambiguityCandidates ?? []);
         return;
@@ -466,7 +468,7 @@ export function HomeClient({ initialGuides }: HomeClientProps) {
               className="rounded-2xl border border-stone-200 bg-white p-5"
             >
               <p className="font-medium text-stone-900">{ambiguityQuestion}</p>
-              <div className="mt-4 grid gap-2 sm:grid-cols-3">
+              <div className="mt-4 grid gap-2">
                 {ambiguityCandidates.map((cand) => (
                   <button
                     key={cand.id}
@@ -477,6 +479,7 @@ export function HomeClient({ initialGuides }: HomeClientProps) {
                       setAmbiguityCandidates([]);
                       setAmbiguityQuestion("");
                       setUnfamiliarCandidateName(cand.name);
+                      void executeLiveInvestigation({ overrideQuery: cand.domain });
                     }}
                     className="rounded-xl border border-stone-200 p-3.5 text-left hover:border-teal-400 hover:bg-teal-50/40"
                   >
@@ -626,9 +629,9 @@ export function HomeClient({ initialGuides }: HomeClientProps) {
                     </p>
                   ) : null}
                   <p className="mt-2">
-                    Reading official docs, developer forums, and Composio&apos;s
-                    catalog, then cross-checking everything. A full investigation
-                    of a new app usually takes 3 to 6 minutes.
+                    {currentStage?.stage === "identifying_provider"
+                      ? "Checking which startups use this name. Doc research starts after one website is chosen."
+                      : "Reading official docs, developer forums, and Composio's catalog, then cross-checking everything. A full investigation of a new app usually takes 3 to 6 minutes."}
                   </p>
                 </div>
               )}

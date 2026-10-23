@@ -10,8 +10,6 @@ build/
 dist/
 
 # Environment variables (Never commit real secrets)
-.env
-.env.local
 .env.development.local
 .env.test.local
 .env.production.local
@@ -32,3 +30,4 @@ yarn-error.log*
 .vercel
 *.tsbuildinfo
 next-env.d.ts
+config.bat

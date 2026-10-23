@@ -75,7 +75,10 @@ export interface ModelProvider {
     providerName: string,
     query: string
   ): Promise<WebFinding[]>;
-  /** Distinct products that share a name. Every URL must come from the search tool. */
+  /**
+   * Distinct startups that share a name, each with its own website and one sentence.
+   * Every URL must come from the search tool. Directory profiles are not startups.
+   */
   findProductsWithThisName?(
     providerName: string
   ): Promise<{ title: string; url: string; snippet: string }[]>;
@@ -1136,12 +1139,15 @@ export class OpenAICompatibleModelProvider implements ModelProvider {
   ): Promise<{ title: string; url: string; snippet: string }[]> {
     const found = await this.groundedWebSearch(
       [
-        `Search the web for different companies or products named "${providerName}".`,
-        "If more than one real product uses this name, list each one separately with its own official website.",
-        "Do not choose between them.",
-        'Return ONLY JSON: {"results":[{"url":"","title":"","what_it_says":"one sentence on what this product is"}]} with up to 6 results.',
-        "Only include URLs that appeared in your search results. Do not guess URLs.",
-      ].join("\n")
+        `Search the web for distinct companies or products that are actually named "${providerName}".`,
+        "List every distinct one you find. Do not stop at a small fixed number, and do not choose between them.",
+        "A funding profile, news article, Wikipedia page, Y Combinator profile, app-store listing, or company database is not its own startup. If one of those pages is about a startup, return that startup's own website once.",
+        "If an app-store listing and a company website are the same product, return the company website once.",
+        "For each startup, title is its name and what_it_says is one short sentence that tells it apart: what it does, plus a year, batch, or category when you found one.",
+        'Return ONLY JSON: {"results":[{"url":"","title":"","what_it_says":""}]}.',
+        "Only include URLs that appeared in your search results. Do not guess a website.",
+      ].join("\n"),
+      { maxResults: 12, maxToolCalls: 4, timeoutMs: 120000, throwOnFailure: true }
     );
     return found.map((item) => ({
       title: item.title,
@@ -1158,10 +1164,18 @@ export class OpenAICompatibleModelProvider implements ModelProvider {
     return this.groundedWebSearch(webSearchInstruction(channel, providerName, query));
   }
 
-  private async groundedWebSearch(instruction: string): Promise<WebFinding[]> {
+  private async groundedWebSearch(
+    instruction: string,
+    options?: {
+      maxResults?: number;
+      maxToolCalls?: number;
+      timeoutMs?: number;
+      throwOnFailure?: boolean;
+    }
+  ): Promise<WebFinding[]> {
     if (!this.isLive()) return [];
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 90000);
+    const timer = setTimeout(() => controller.abort(), options?.timeoutMs ?? 90000);
     try {
       const res = await this.fetchImpl(`${this.baseUrl}/responses`, {
         method: "POST",
@@ -1173,14 +1187,19 @@ export class OpenAICompatibleModelProvider implements ModelProvider {
         body: JSON.stringify({
           model: this.model,
           tools: [{ type: "web_search" }],
-          // Unbounded tool use can run for minutes; two searches per request keeps each call ~10-20s.
-          max_tool_calls: 2,
+          // Unbounded tool use can run for minutes; a small cap keeps each call short.
+          max_tool_calls: options?.maxToolCalls ?? 2,
           include: ["web_search_call.action.sources"],
           ...(isReasoningModel(this.model) ? { reasoning: { effort: "low" } } : {}),
           input: instruction,
         }),
       });
-      if (!res.ok) return [];
+      if (!res.ok) {
+        if (options?.throwOnFailure) {
+          throw new Error(`Startup check returned HTTP ${res.status}`);
+        }
+        return [];
+      }
       const payload = (await res.json()) as {
         output?: Array<{
           type?: string;
@@ -1220,8 +1239,9 @@ export class OpenAICompatibleModelProvider implements ModelProvider {
           title: typeof r.title === "string" && r.title.trim() ? r.title.trim().slice(0, 160) : r.url,
           summary: typeof r.what_it_says === "string" ? r.what_it_says.trim().slice(0, 700) : "",
         }))
-        .slice(0, 6);
-    } catch {
+        .slice(0, options?.maxResults ?? 6);
+    } catch (err) {
+      if (options?.throwOnFailure) throw err;
       return [];
     } finally {
       clearTimeout(timer);

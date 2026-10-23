@@ -58,7 +58,7 @@ Where the research is:
 
 It follows the same method as the hand research, in 7 visible steps:
 
-1. **Identify the app** — and ask you to clarify if the name is ambiguous (for example "Mercury").
+1. **Identify the app** — and ask you to clarify if the name is ambiguous (for example "Mercury"). A new name is not turned into `name.com`; the official website is taken from search results, and two matching websites produce a question.
 2. **Read the official docs** — web-search for the provider's OAuth, permissions and app-review pages, open them, and follow useful links inside them.
 3. **Find real developer problems** — read the docs, plan 7–9 targeted searches, then search Stack Overflow (with answers), GitHub issues (with maintainer replies), Reddit, forums and the web.
 4. **Cross-check** — read all sources side by side, drop off-topic ones, merge duplicates, and mark each problem as documented, confirmed, seen by several people, or only a guess.
@@ -82,7 +82,7 @@ Five real live guides are included in `data/sample-live-guides.json`, so you can
 
 | Check | Result | Where |
 | :--- | :--- | :--- |
-| Unit tests (small pieces of code, including the database store and the daily limit) | 48 pass | `tests/unit/` |
+| Unit tests (small pieces of code, including the database store, the daily limit, and website lookup) | 54 pass | `tests/unit/` |
 | Integration tests (whole agent with fake web and fake AI) | 20 pass | `tests/integration/` |
 | Agent evaluations (12 tricky cases, e.g. ambiguous name, hidden instructions in a web page, unsafe URL, no public login) | 12 of 12 pass, score 240/240 | `evals/runner.ts` |
 | Type check, lint, production build | All pass | `npm run typecheck`, `npm run lint`, `npm run build` |

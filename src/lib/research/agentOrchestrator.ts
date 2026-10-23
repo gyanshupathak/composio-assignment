@@ -9,6 +9,7 @@ import {
   AmbiguityCandidate,
   identifyProvider,
 } from "./providerIdentifier";
+import { organizationHost, resolveProviderWebsite } from "./providerWebsite";
 import {
   buildResearchQueryPlan,
   TavilyWebSearchProvider,
@@ -255,21 +256,22 @@ export async function runLiveInvestigation(
   }
 
   const providerName = identification.providerName ?? request.query.trim();
-  const canonicalDomain =
-    identification.canonicalDomain ?? "https://example.com";
+  let canonicalDomain = identification.canonicalDomain ?? "";
   const slug = request.forceFreshResearch
     ? createCollisionResistantSlug(providerName, request.integrationGoal)
     : createSlug(providerName);
-
-  pushStage(
-    "identifying_provider",
-    "1. Identifying the provider",
-    "completed",
-    `Identified target provider "${providerName}" (${canonicalDomain}).`
-  );
+  const identityResults: RawDiscoveredSource[] = [];
 
   // Check if search provider is configured before claiming search work
   if (!searchProvider.isConfigured()) {
+    pushStage(
+      "identifying_provider",
+      "1. Identifying the provider",
+      "completed",
+      canonicalDomain
+        ? `Identified target provider "${providerName}" (${canonicalDomain}).`
+        : `Identified "${providerName}". Its website was not looked up because live search is off.`
+    );
     pushStage(
       "retrieving_official_docs",
       "2. Retrieving official documentation",
@@ -284,6 +286,70 @@ export async function runLiveInvestigation(
         "Live web research requires TAVILY_API_KEY (and optional AI_API_KEY for LLM refinement) in .env.local. Curated guides remain fully functional without API keys.",
     };
   }
+
+  let websiteDetail = canonicalDomain
+    ? `Identified target provider "${providerName}" (${canonicalDomain}).`
+    : "";
+
+  if (!canonicalDomain) {
+    pushStage(
+      "identifying_provider",
+      "1. Identifying the provider",
+      "in_progress",
+      `Looking up the official website for "${providerName}".`
+    );
+    try {
+      const lookup = await searchProvider.search(
+        `"${providerName.replace(/"/g, "")}" official website`,
+        8
+      );
+      const resolution = resolveProviderWebsite(
+        providerName,
+        lookup.ok ? lookup.results : []
+      );
+      if (resolution.status === "ambiguous") {
+        pushStage(
+          "identifying_provider",
+          "1. Identifying the provider",
+          "completed",
+          resolution.detail
+        );
+        return {
+          status: "ambiguous_clarification_needed",
+          clarifyingQuestion: resolution.clarifyingQuestion,
+          ambiguityCandidates: resolution.candidates,
+          stages,
+          runtimeConfigStatus,
+        };
+      }
+      if (resolution.status === "confirmed" && resolution.canonicalDomain) {
+        canonicalDomain = resolution.canonicalDomain;
+        const chosen = organizationHost(new URL(canonicalDomain).hostname);
+        for (const result of lookup.results) {
+          try {
+            if (organizationHost(new URL(result.url).hostname) === chosen) {
+              identityResults.push({
+                ...result,
+                retrievalStatus: result.retrievalStatus ?? "search_indexed_verified",
+              });
+            }
+          } catch {
+            // Skip a result whose address cannot be read.
+          }
+        }
+      }
+      websiteDetail = resolution.detail;
+    } catch {
+      websiteDetail = `The website lookup for "${providerName}" did not finish, so research continues from the name only.`;
+    }
+  }
+
+  pushStage(
+    "identifying_provider",
+    "1. Identifying the provider",
+    "completed",
+    websiteDetail
+  );
 
   if (deps.reserveLiveResearch) {
     const slot = await deps.reserveLiveResearch();
@@ -306,7 +372,7 @@ export async function runLiveInvestigation(
 
   const queryPlan = buildResearchQueryPlan(
     providerName,
-    canonicalDomain,
+    canonicalDomain || undefined,
     request.integrationGoal
   );
   const totalPlannedQueries =
@@ -317,7 +383,7 @@ export async function runLiveInvestigation(
   let searchesExecuted = 0;
   let sourcesFailedCount = 0;
   const normalizedQueries: string[] = [];
-  const rawDiscovered: RawDiscoveredSource[] = [];
+  const rawDiscovered: RawDiscoveredSource[] = [...identityResults];
   const deepResearch = Boolean(modelProvider.supportsLiveResearch?.());
   let researchPlan: ResearchPlan | null = null;
 
@@ -657,6 +723,45 @@ export async function runLiveInvestigation(
     "in_progress",
     "Deduplicating URLs, sanitizing untrusted web content, and synthesizing pain-point evidence."
   );
+
+  if (!canonicalDomain) {
+    const later = resolveProviderWebsite(providerName, rawDiscovered, {
+      askWhenClose: false,
+    });
+    if (later.status === "ambiguous") {
+      pushStage(
+        "identifying_provider",
+        "1. Identifying the provider",
+        "completed",
+        later.detail
+      );
+      return {
+        status: "ambiguous_clarification_needed",
+        clarifyingQuestion: later.clarifyingQuestion,
+        ambiguityCandidates: later.candidates,
+        stages,
+        runtimeConfigStatus,
+      };
+    }
+    if (later.status === "confirmed" && later.canonicalDomain) {
+      canonicalDomain = later.canonicalDomain;
+    }
+  }
+
+  if (!canonicalDomain) {
+    pushStage(
+      "cross_checking_findings",
+      "4. Cross-checking findings",
+      "failed",
+      `No public website for "${providerName}" was found, so no guide was saved.`
+    );
+    return {
+      status: "research_failed",
+      stages,
+      runtimeConfigStatus,
+      errorMessage: `No public website for ${providerName} was found, so no guide was saved.`,
+    };
+  }
 
   const canonicalSources = catalog(rawDiscovered, slug, canonicalDomain);
 

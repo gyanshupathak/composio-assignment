@@ -299,13 +299,12 @@ export function identifyProvider(
         .replace(/\b\w/g, (c) => c.toUpperCase())
     : rawQuery.replace(/\b\w/g, (c) => c.toUpperCase());
 
+  // A typed name is not a website. The address is kept only when the user entered one.
   return {
     status: "identified_new_provider",
     normalizedQuery: normalized,
     providerName: displayTitle,
-    canonicalDomain:
-      validatedUrl ??
-      `https://${normalized.replace(/[^a-z0-9]/g, "")}.com`,
+    canonicalDomain: validatedUrl,
     suppliedUrl: validatedUrl,
   };
 }

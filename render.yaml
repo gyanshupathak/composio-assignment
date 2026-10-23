@@ -1,0 +1,26 @@
+# Render Blueprint: one free web service. Secrets marked "sync: false" are typed into the
+# Render dashboard when the Blueprint is created; they are never stored in this repository.
+services:
+  - type: web
+    name: authpath
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: AI_API_KEY
+        sync: false
+      - key: AI_MODEL
+        value: gpt-5.5
+      - key: AI_BASE_URL
+        value: https://api.openai.com/v1
+      - key: AUTHPATH_STORAGE_PROVIDER
+        value: upstash
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+      - key: LIVE_RESEARCH_DAILY_LIMIT
+        value: "10"

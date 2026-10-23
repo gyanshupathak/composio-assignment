@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-canvas: #f7f6f3;
+    --text-primary: #1c1917;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--bg-canvas);
+    color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+*:focus-visible {
+  outline: 2px solid #0d9488;
+  outline-offset: 2px;
+  border-radius: 6px;
+}

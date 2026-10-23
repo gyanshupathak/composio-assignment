@@ -7,6 +7,8 @@ It has two parts:
 1. **4 ready-made guides** researched by hand: GitHub, Gmail, Slack and Notion.
 2. **A live research agent**: type any other app and it researches the web and writes a new shareable guide in about 3–6 minutes.
 
+**Live site:** [authpath.onrender.com](https://authpath.onrender.com/) · **Source:** [github.com/gyanshupathak/composio-assignment](https://github.com/gyanshupathak/composio-assignment)
+
 > **New here? Read [`docs/PROJECT_OVERVIEW.md`](docs/PROJECT_OVERVIEW.md).** It explains the whole project on one page: what was built, how much research was done, how it was tested, which file holds what, and where each part of the assignment is.
 
 ---

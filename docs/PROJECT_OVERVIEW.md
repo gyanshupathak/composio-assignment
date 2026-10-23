@@ -111,7 +111,7 @@ There are no automated browser tests; the website was checked by hand.
 | Understand what a provider OAuth app is and Composio's managed OAuth | `docs/research/provider-dossiers/`, `docs/product-decisions.md` |
 | A short README with setup, key decisions, limitations | `README.md` |
 | Keep credentials out | Keys live only in `.env.local`, which git ignores; `.env.example` has placeholders only |
-| A link to the working experience and the source repository | Source code: https://github.com/gyanshupathak/composio-assignment. The live site comes next, on Render's free plan. |
+| A link to the working experience and the source repository | Live site: https://authpath.onrender.com/ · Source: https://github.com/gyanshupathak/composio-assignment |
 
 ## 8. Every folder and file
 

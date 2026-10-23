@@ -91,7 +91,7 @@ None of these need an API key.
 ```bash
 npm run typecheck          # TypeScript check
 npm run lint               # Code style check
-npm test                   # All 74 tests (54 unit + 20 integration)
+npm test                   # All 77 tests (57 unit + 20 integration)
 npm run test:unit          # Unit tests only
 npm run test:integration   # Integration tests only (whole agent with fake web and fake AI)
 npm run evals              # 12 agent evaluations (ambiguous names, hidden instructions in pages, unsafe URLs, no public login, ...)

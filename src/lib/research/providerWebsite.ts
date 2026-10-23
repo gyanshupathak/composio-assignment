@@ -123,6 +123,63 @@ interface ScoredSite {
   snippet: string;
 }
 
+function websitesNamedIn(text: string): string[] {
+  const found = new Set<string>();
+  for (const match of text.match(/https?:\/\/[^\s<>"')\]]+/gi) ?? []) {
+    found.add(match.replace(/[.,;]+$/, ""));
+  }
+  for (const match of text.match(/\b(?:[a-z0-9-]+\.)+[a-z]{2,}\b/gi) ?? []) {
+    found.add(`https://${match}`);
+  }
+  return Array.from(found);
+}
+
+function hostMatchesName(host: string, providerName: string): boolean {
+  const compact = providerName.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (compact.length < 3) return false;
+  return host.split(".").some((label) => label.replace(/[^a-z0-9]/g, "") === compact);
+}
+
+function consider(
+  url: string,
+  title: string,
+  snippet: string,
+  providerName: string,
+  sites: Map<string, ScoredSite>,
+  hostMustMatchName = false
+): void {
+  const rawHost = hostOf(url);
+  if (!rawHost || isDirectoryHost(rawHost)) return;
+  const host = organizationHost(rawHost);
+  if (!host || isDirectoryHost(host)) return;
+  if (hostMustMatchName && !hostMatchesName(host, providerName)) return;
+  const text = `${title} ${snippet} ${url}`;
+  if (!mentionsName(text, rawHost, providerName) && !hostMatchesName(host, providerName)) return;
+
+  let score = 2;
+  try {
+    const path = new URL(url).pathname;
+    if (path === "/" || path === "") score += 2;
+  } catch {
+    // The host already parsed, so the path bonus is optional.
+  }
+  if (SITE_PREFIX.test(rawHost.split(".")[0] ?? "")) score += 1;
+
+  const cleanTitle = title.trim() || providerName;
+  const cleanSnippet = snippet.trim();
+  const current = sites.get(host);
+  if (!current) {
+    sites.set(host, { host, score, bestHit: score, title: cleanTitle, snippet: cleanSnippet });
+  } else {
+    current.score += score;
+    if (score > current.bestHit) {
+      current.bestHit = score;
+      current.title = cleanTitle;
+      current.snippet = cleanSnippet;
+    }
+  }
+}
+
 export function resolveProviderWebsite(
   providerName: string,
   results: WebsiteCandidateResult[],
@@ -132,34 +189,15 @@ export function resolveProviderWebsite(
 
   for (const result of results) {
     const rawHost = hostOf(result.url);
-    if (!rawHost || isDirectoryHost(rawHost)) continue;
-    const host = organizationHost(rawHost);
-    if (!host || isDirectoryHost(host)) continue;
     const text = `${result.title} ${result.snippet} ${result.url}`;
-    if (!mentionsName(text, rawHost, providerName)) continue;
-
-    let score = 2;
-    try {
-      const path = new URL(result.url).pathname;
-      if (path === "/" || path === "") score += 2;
-    } catch {
-      // The host already parsed, so the path bonus is optional.
-    }
-    if (SITE_PREFIX.test(rawHost.split(".")[0] ?? "")) score += 1;
-
-    const title = result.title.trim() || providerName;
-    const snippet = result.snippet.trim();
-    const current = sites.get(host);
-    if (!current) {
-      sites.set(host, { host, score, bestHit: score, title, snippet });
-    } else {
-      current.score += score;
-      if (score > current.bestHit) {
-        current.bestHit = score;
-        current.title = title;
-        current.snippet = snippet;
+    if (rawHost && isDirectoryHost(rawHost)) {
+      // A Y Combinator or Wikipedia page is not the company. A website named in it is.
+      for (const mentioned of websitesNamedIn(text)) {
+        consider(mentioned, result.title, result.snippet, providerName, sites, true);
       }
+      continue;
     }
+    consider(result.url, result.title, result.snippet, providerName, sites);
   }
 
   const ranked = Array.from(sites.values()).sort((a, b) => b.score - a.score);
@@ -173,13 +211,13 @@ export function resolveProviderWebsite(
   const leader = ranked[0];
   const runnerUp = ranked[1];
   const askWhenClose = options?.askWhenClose !== false;
-  const clearLeader =
-    !runnerUp ||
-    (askWhenClose
-      ? leader.score >= runnerUp.score + 3
-      : leader.score > runnerUp.score);
+  // The opening lookup asks whenever two companies share the name, even if one has more pages.
+  // A later pass may keep the leader so a long research is not thrown away on a passing mention.
+  const confirmLeader =
+    ranked.length === 1 ||
+    (!askWhenClose && !!runnerUp && leader.score > runnerUp.score);
 
-  if (ranked.length === 1 || clearLeader) {
+  if (confirmLeader) {
     return {
       status: "confirmed",
       canonicalDomain: `https://${leader.host}`,

@@ -29,6 +29,30 @@ describe("Unknown app names do not become name.com", () => {
     expect(resolution.detail).not.toContain("lantern.com was");
   });
 
+  it("asks even when one Lantern has more pages than the other", () => {
+    const resolution = resolveProviderWebsite("Lantern", [
+      { title: "Lantern", url: "https://lantern.is/", snippet: "Lantern helps brands rank in AI search." },
+      { title: "Lantern docs", url: "https://docs.lantern.is/start", snippet: "Lantern documentation." },
+      { title: "Lantern blog", url: "https://lantern.is/blog", snippet: "Lantern product updates." },
+      { title: "Lantern AI", url: "https://lantern.md/", snippet: "Lantern is an AI hiring manager." },
+    ]);
+    expect(resolution.status).toBe("ambiguous");
+    expect(resolution.candidates?.map((c) => c.domain).sort()).toEqual(["lantern.is", "lantern.md"]);
+  });
+
+  it("reads the company website out of a Y Combinator page instead of treating that page as the company", () => {
+    const resolution = resolveProviderWebsite("Lantern", [
+      { title: "Lantern", url: "https://lantern.is/", snippet: "Where your products rank in AI search." },
+      {
+        title: "Lantern AI: Turn Your Taste Into Hires",
+        url: "https://www.ycombinator.com/companies/lantern-ai",
+        snippet: "Lantern AI is a hiring startup. Official website: https://lantern.md",
+      },
+    ]);
+    expect(resolution.status).toBe("ambiguous");
+    expect(resolution.candidates?.map((c) => c.domain).sort()).toEqual(["lantern.is", "lantern.md"]);
+  });
+
   it("accepts one website from the results and does not invent a second", () => {
     const resolution = resolveProviderWebsite("Dropbox", [
       { title: "Dropbox for Developers", url: "https://www.dropbox.com/developers", snippet: "Dropbox API documentation." },
@@ -74,6 +98,37 @@ describe("Live research uses the looked-up website", () => {
     };
   }
 
+  it("asks when the model finds a second Lantern that web search alone missed", async () => {
+    const provider = search([
+      { title: "Lantern", url: "https://lantern.is/", snippet: "Lantern ranks products in AI search." },
+    ]);
+    const res = await runLiveInvestigation(
+      { query: "Lantern" },
+      {
+        searchProvider: provider,
+        pageExtractor: extractor,
+        guideStore: new InMemoryGuideStore(),
+        modelProvider: {
+          isConfigured: () => true,
+          async generateAndValidateGuide() {
+            throw new Error("should have asked before writing a guide");
+          },
+          async findProductsWithThisName() {
+            return [
+              { title: "Lantern", url: "https://lantern.is/", snippet: "AI search for products." },
+              { title: "Lantern AI", url: "https://lantern.md/", snippet: "AI hiring manager." },
+            ];
+          },
+        },
+      }
+    );
+    expect(res.status).toBe("ambiguous_clarification_needed");
+    expect(res.ambiguityCandidates?.map((c) => c.domain).sort()).toEqual([
+      "lantern.is",
+      "lantern.md",
+    ]);
+  });
+
   it("stops and asks which Lantern before researching either website", async () => {
     const store = new InMemoryGuideStore();
     const provider = search([
@@ -86,8 +141,7 @@ describe("Live research uses the looked-up website", () => {
     );
     expect(res.status).toBe("ambiguous_clarification_needed");
     expect(res.ambiguityCandidates?.map((c) => c.domain).sort()).toEqual(["lantern.com", "lantern.md"]);
-    expect(provider.calls).toHaveLength(1);
-    expect(provider.calls[0]).toContain("official website");
+    expect(provider.calls.some((q) => q.includes("official website"))).toBe(true);
     expect(await store.getGuideBySlug("lantern")).toBeNull();
   });
 

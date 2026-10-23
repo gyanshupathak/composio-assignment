@@ -75,6 +75,10 @@ export interface ModelProvider {
     providerName: string,
     query: string
   ): Promise<WebFinding[]>;
+  /** Distinct products that share a name. Every URL must come from the search tool. */
+  findProductsWithThisName?(
+    providerName: string
+  ): Promise<{ title: string; url: string; snippet: string }[]>;
   planResearch?(ctx: DeepResearchContext): Promise<ResearchPlan | null>;
   analyzeEvidence?(ctx: DeepResearchContext): Promise<EvidenceAnalysis | null>;
   decideAuthPath?(ctx: DeepResearchContext): Promise<AuthDecision | null>;
@@ -1127,11 +1131,34 @@ export class OpenAICompatibleModelProvider implements ModelProvider {
     }
   }
 
+  async findProductsWithThisName(
+    providerName: string
+  ): Promise<{ title: string; url: string; snippet: string }[]> {
+    const found = await this.groundedWebSearch(
+      [
+        `Search the web for different companies or products named "${providerName}".`,
+        "If more than one real product uses this name, list each one separately with its own official website.",
+        "Do not choose between them.",
+        'Return ONLY JSON: {"results":[{"url":"","title":"","what_it_says":"one sentence on what this product is"}]} with up to 6 results.',
+        "Only include URLs that appeared in your search results. Do not guess URLs.",
+      ].join("\n")
+    );
+    return found.map((item) => ({
+      title: item.title,
+      url: item.url,
+      snippet: item.summary,
+    }));
+  }
+
   async searchWeb(
     channel: ResearchChannel | "official",
     providerName: string,
     query: string
   ): Promise<WebFinding[]> {
+    return this.groundedWebSearch(webSearchInstruction(channel, providerName, query));
+  }
+
+  private async groundedWebSearch(instruction: string): Promise<WebFinding[]> {
     if (!this.isLive()) return [];
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 90000);
@@ -1150,7 +1177,7 @@ export class OpenAICompatibleModelProvider implements ModelProvider {
           max_tool_calls: 2,
           include: ["web_search_call.action.sources"],
           ...(isReasoningModel(this.model) ? { reasoning: { effort: "low" } } : {}),
-          input: webSearchInstruction(channel, providerName, query),
+          input: instruction,
         }),
       });
       if (!res.ok) return [];

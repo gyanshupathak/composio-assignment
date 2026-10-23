@@ -82,7 +82,7 @@ Five real live guides are included in `data/sample-live-guides.json`, so you can
 
 | Check | Result | Where |
 | :--- | :--- | :--- |
-| Unit tests (small pieces of code, including the database store, the daily limit, and website lookup) | 54 pass | `tests/unit/` |
+| Unit tests (small pieces of code, including the database store, the daily limit, and website lookup) | 57 pass | `tests/unit/` |
 | Integration tests (whole agent with fake web and fake AI) | 20 pass | `tests/integration/` |
 | Agent evaluations (12 tricky cases, e.g. ambiguous name, hidden instructions in a web page, unsafe URL, no public login) | 12 of 12 pass, score 240/240 | `evals/runner.ts` |
 | Type check, lint, production build | All pass | `npm run typecheck`, `npm run lint`, `npm run build` |

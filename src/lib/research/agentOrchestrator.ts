@@ -299,14 +299,23 @@ export async function runLiveInvestigation(
       `Looking up the official website for "${providerName}".`
     );
     try {
-      const lookup = await searchProvider.search(
-        `"${providerName.replace(/"/g, "")}" official website`,
-        8
-      );
-      const resolution = resolveProviderWebsite(
-        providerName,
-        lookup.ok ? lookup.results : []
-      );
+      const safeName = providerName.replace(/"/g, "");
+      const [official, company, fromModel] = await Promise.all([
+        searchProvider.search(`"${safeName}" official website`, 8),
+        searchProvider.search(`${safeName} company`, 6),
+        modelProvider.findProductsWithThisName
+          ? modelProvider.findProductsWithThisName(providerName).catch(() => [])
+          : Promise.resolve([]),
+      ]);
+      const found = [
+        ...(official.ok ? official.results : []),
+        ...(company.ok ? company.results : []),
+        ...fromModel.map((item) => ({
+          ...item,
+          retrievalStatus: "search_indexed_verified" as const,
+        })),
+      ];
+      const resolution = resolveProviderWebsite(providerName, found);
       if (resolution.status === "ambiguous") {
         pushStage(
           "identifying_provider",
@@ -325,7 +334,7 @@ export async function runLiveInvestigation(
       if (resolution.status === "confirmed" && resolution.canonicalDomain) {
         canonicalDomain = resolution.canonicalDomain;
         const chosen = organizationHost(new URL(canonicalDomain).hostname);
-        for (const result of lookup.results) {
+        for (const result of found) {
           try {
             if (organizationHost(new URL(result.url).hostname) === chosen) {
               identityResults.push({
